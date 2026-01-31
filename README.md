@@ -31,11 +31,6 @@ This project is intended for educational purposes only and follows the constrain
 
 - **Python 3.x** (recommended: 3.10+)
 
-If the project includes a `requirements.txt`, install dependencies with:
-```bash
-pip install -r requirements.txt
-```
-
 ---
 
 ## How to Run
