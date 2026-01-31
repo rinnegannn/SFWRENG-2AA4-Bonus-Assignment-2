@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
-This is a soccer model to Java code generator.
-This generator implements the translation algorithm,
-reads from the draw.io XML files and generates Java source code.
+Soccer Model to Java Code Generator
+
+This script implements a translation algorithm that reads Entity-Relationship models 
+from draw.io XML files and generates corresponding Java source code. It handles:
+- Entity extraction
+- Inheritance relationships
+- Associations/Relationships (1:1, 1:*, etc.)
+- Java class generation with getters, setters, and constructors
 """
 
 import xml.etree.ElementTree as ET
@@ -12,8 +17,24 @@ from typing import Dict, List, Tuple, Optional
 
 
 class Entity:
-    """represents a class/entity in the model"""
+    """
+    Represents a class/entity in the model.
+    
+    Attributes:
+        id (str): The unique identifier from the XML.
+        name (str): The name of the entity (class name).
+        parent (Optional[str]): The name of the parent class if this entity inherits from another.
+        fields (List[Dict]): A list of fields/attributes representing relationships.
+        children (List[str]): Names of child classes that inherit from this entity.
+    """
     def __init__(self, entity_id: str, name: str):
+        """
+        Initialize an Entity.
+
+        Args:
+            entity_id: Unique descriptor for the entity.
+            name: Human-readable name of the entity.
+        """
         self.id = entity_id
         self.name = name
         self.parent: Optional[str] = None
@@ -22,8 +43,27 @@ class Entity:
 
 
 class Relationship:
-    """represents relationship between entities"""
+    """
+    Represents a relationship between two entities.
+    
+    Attributes:
+        source_id (str): ID of the source entity.
+        target_id (str): ID of the target entity.
+        label (str): Raw label text from the edge.
+        is_inheritance (bool): True if this represents an inheritance (is-a) relationship.
+        relationship_name (str): Parsed name of the relationship.
+        cardinality (str): Parsed cardinality (e.g., "1 : *").
+    """
     def __init__(self, source_id: str, target_id: str, label: str, is_inheritance: bool = False):
+        """
+        Initialize a Relationship.
+
+        Args:
+            source_id: ID of the source entity.
+            target_id: ID of the target entity.
+            label: Text label on the connector.
+            is_inheritance: Whether this is an inheritance arrow.
+        """
         self.source_id = source_id
         self.target_id = target_id
         self.label = label
@@ -34,7 +74,11 @@ class Relationship:
 
     
     def _parse_label(self):
-        """extracts the relationship name and cardinality from the label"""
+        """
+        Extracts the relationship name and cardinality from the raw label.
+        
+        Expected format: "Name \n Cardinality" (e.g., "has \n 1 : *")
+        """
         if self.label and '\n' in self.label:
             parts = self.label.split('\n')
             self.relationship_name = parts[0].strip() if len(parts) > 0 else ""
@@ -47,16 +91,35 @@ class Relationship:
 
 
 class ModelToJavaGenerator:
-    """main class for code generator"""
+    """
+    Main class for the code generator logic.
+    
+    Attributes:
+        xml_file (str): Path to the input XML file.
+        entities (Dict[str, Entity]): Map of ID to Entity objects.
+        relationships (List[Relationship]): List of association relationships.
+        inheritance_relations (List[Relationship]): List of inheritance relationships.
+    """
     
     def __init__(self, xml_file: str):
+        """
+        Initialize the generator.
+
+        Args:
+            xml_file: Path to the draw.io XML file.
+        """
         self.xml_file = xml_file
         self.entities: Dict[str, Entity] = {}
         self.relationships: List[Relationship] = []
         self.inheritance_relations: List[Relationship] = []
     
     def parse_model(self):
-        """parse the draw.io XML file and extract entities and relationships"""
+        """
+        Parses the draw.io XML file to extract entities and relationships.
+        
+        This method scans the XML for 'mxCell' elements, differentiating between
+        entity nodes (rectangles) and relationship edges (arrows).
+        """
         tree = ET.parse(self.xml_file)
         root = tree.getroot()
         
@@ -123,8 +186,12 @@ class ModelToJavaGenerator:
                     print(f"Found relationship: {source_id} -> {target_id} ({edge_label})")
     
     def process_inheritance(self):
-
-        """process inheritance relationships"""
+        """
+        Links entities based on inheritance relationships.
+        
+        Updates the 'parent' attribute of child entities and the 'children' list
+        of parent entities.
+        """
         for rel in self.inheritance_relations:
             if rel.source_id in self.entities and rel.target_id in self.entities:
                 child = self.entities[rel.source_id]
@@ -134,8 +201,12 @@ class ModelToJavaGenerator:
                 print(f"Inheritance: {child.name} extends {parent.name}")
     
     def process_associations(self):
-
-        """process association relationships and create fields"""
+        """
+        Converts association relationships into fields within the entities.
+        
+        For each relationship, a field is added to the source entity using the
+        target entity's type, based on the specified cardinality.
+        """
         for rel in self.relationships:
             if rel.source_id in self.entities and rel.target_id in self.entities:
                 source_entity = self.entities[rel.source_id]
@@ -155,7 +226,15 @@ class ModelToJavaGenerator:
                 print(f"Field: {source_entity.name}.{field_name} : {field_type}")
     
     def to_camel_case(self, text: str) -> str:
-        """turns text into camelCase"""
+        """
+        Converts a string to camelCase.
+
+        Args:
+            text: The input string (e.g., "hello_world" or "Hello World").
+
+        Returns:
+            The string in camelCase (e.g., "helloWorld").
+        """
         text = text.replace('_', ' ').replace('-', ' ') #turn underscores and hyphens into spaces
         words = text.split() #split into words
         if not words:
@@ -164,7 +243,16 @@ class ModelToJavaGenerator:
         return words[0].lower() + ''.join(word.capitalize() for word in words[1:])
     
     def determine_type(self, target_class: str, cardinality: str) -> str:
-        """determine type based on cardinality"""
+        """
+        Determines the Java type for a relationship field based on cardinality.
+
+        Args:
+            target_class: The class name of the target entity.
+            cardinality: The cardinality string (e.g., "1 : *").
+
+        Returns:
+            The Java type string (e.g., "List<Target>" or "Target").
+        """
         parts = cardinality.split(':') #split into source and target parts
         if len(parts) != 2:
             return target_class
@@ -184,7 +272,15 @@ class ModelToJavaGenerator:
             return target_class
     
     def generate_java_class(self, entity: Entity) -> str:
-        """generate Java source code for entity"""
+        """
+        Generates the Java source code for a single entity.
+
+        Args:
+            entity: The Entity object to generate code for.
+
+        Returns:
+            A string containing the complete Java class definition.
+        """
         code = []
         
         #check if we need to import List
@@ -239,7 +335,12 @@ class ModelToJavaGenerator:
         return '\n'.join(code)
     
     def generate_all_classes(self, output_dir: str):
-        """generate the Java files for every entity"""
+        """
+        Generates and saves Java files for all parsed entities.
+
+        Args:
+            output_dir: The directory where Java files should be saved.
+        """
         os.makedirs(output_dir, exist_ok=True)
         
         for entity_id, entity in self.entities.items(): #iterate over all entities
@@ -252,7 +353,12 @@ class ModelToJavaGenerator:
             print(f"Generated: {filename}")
     
     def run(self, output_dir: str):
-        """Main method for execution"""
+        """
+        Executes the full generation pipeline.
+
+        Args:
+            output_dir: The target directory for the generated code.
+        """
         print("=" * 60)
         print("//Demo: Soccer Model to Java Code Generator//")
         print("=" * 60)
@@ -281,7 +387,10 @@ class ModelToJavaGenerator:
 
 
 def main():
-    """Main entry point"""
+    """
+    Main entry point for the CLI.
+    Parses command line arguments and initiates the generation process.
+    """
     import sys
     
     if len(sys.argv) >= 3: #checks for command line arguments
@@ -289,7 +398,7 @@ def main():
         output_dir = sys.argv[2]
     else:
         #default soccer example
-        input_file = "model_soccer.drawio"
+        input_file = "examples/default/model_soccer.drawio"
         output_dir = "examples/default/src-gen"
     
     if not os.path.exists(input_file):
