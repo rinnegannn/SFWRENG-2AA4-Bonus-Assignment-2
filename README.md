@@ -43,6 +43,7 @@ This project is intended for educational purposes only and follows the constrain
 2. Move into the project folder:
    ```bash
    cd SFWRENG-2AA4-Bonus-Assignment-2
+   
    ```
 
 4. Run the program:
