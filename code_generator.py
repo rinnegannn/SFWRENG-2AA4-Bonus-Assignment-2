@@ -15,6 +15,9 @@ import re
 import os
 from typing import Dict, List, Tuple, Optional
 
+# Constants
+HTML_TAG_PATTERN = r'<[^>]+>'
+
 
 class Entity:
     """
@@ -125,6 +128,13 @@ class ModelToJavaGenerator:
         
         cells = root.findall(".//mxCell") #finds all mxCell elements in the XML file
         
+        self._extract_entities(cells)
+        edge_labels = self._extract_edge_labels(cells)
+        self._extract_relationships(cells, edge_labels)
+
+    def _extract_entities(self, cells: List[ET.Element]):
+        """Helper to extract rectangles with values as entities."""
+        
         # extract the rectangles with values as entities
         for cell in cells:
             cell_id = cell.get('id')
@@ -135,13 +145,14 @@ class ModelToJavaGenerator:
             if value and 'whiteSpace=wrap' in style and cell_id:
 
                 #remove any HTML tags if present
-                clean_value = re.sub(r'<[^>]+>', '', value).strip()
+                clean_value = re.sub(HTML_TAG_PATTERN, '', value).strip()
                 if clean_value and clean_value not in ['0', '1']:  #skip over root cells
                     entity = Entity(cell_id, clean_value)
                     self.entities[cell_id] = entity
                     print(f"Found entity: {clean_value} (ID: {cell_id})")
-        
-        #make a map of edge labels
+
+    def _extract_edge_labels(self, cells: List[ET.Element]) -> Dict[str, str]:
+        """Helper to extract map of edge labels."""
         edge_labels = {}
         for cell in cells:
             parent_id = cell.get('parent')
@@ -150,12 +161,15 @@ class ModelToJavaGenerator:
             
             #check for edge label (if it has parent and is an edgeLabel)
             if parent_id and 'edgeLabel' in style and value:
-                clean_label = re.sub(r'<[^>]+>', '', value).strip()
+                clean_label = re.sub(HTML_TAG_PATTERN, '', value).strip()
                 #clean up HTML entities
                 clean_label = clean_label.replace('&#xa;', '\n')
                 edge_labels[parent_id] = clean_label
+        return edge_labels
+
+    def _extract_relationships(self, cells: List[ET.Element], edge_labels: Dict[str, str]):
+        """Helper to extract arrows/edges as relationships."""
         
-        # extract arrows/edges as relationships
         for cell in cells:
             source_id = cell.get('source')
             target_id = cell.get('target')
@@ -172,7 +186,7 @@ class ModelToJavaGenerator:
                 
                 #check the edge label for value
                 if not edge_label and value:
-                    edge_label = re.sub(r'<[^>]+>', '', value).strip()
+                    edge_label = re.sub(HTML_TAG_PATTERN, '', value).strip()
                 
                 #create relationship object
                 relationship = Relationship(source_id, target_id, edge_label, is_inheritance)
@@ -257,7 +271,6 @@ class ModelToJavaGenerator:
         if len(parts) != 2:
             return target_class
         
-        source_card = parts[0].strip()
         target_card = parts[1].strip()
         
         #check the cardinality/what we're storing
